@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: kingshot-discord-bot
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: DISCORD_TOKEN
+        value: replace-me
+      - key: DATABASE_DIR
+        value: /data
+      - key: PORT
+        value: 10000
