@@ -929,13 +929,28 @@ if __name__ == "__main__":
 
                 update = False
 
-                if not is_container():
-                    if "--autoupdate" in sys.argv or repair_mode:
-                        update = True
-                    else:
-                        print("  Note: If your terminal is not interactive, you can use the --autoupdate argument to skip this prompt.")
-                        ask = input("  Do you want to update? (y/n): ").strip().lower()
-                        update = ask == "y"
+                # On Render / non-interactive hosts, never prompt and never auto-pull
+                # upstream releases (that would wipe custom deploy changes like Neon sync).
+                on_render = bool(os.environ.get("RENDER"))
+                interactive = False
+                try:
+                    interactive = sys.stdin.isatty()
+                except Exception:
+                    interactive = False
+
+                if "--autoupdate" in sys.argv or repair_mode:
+                    update = True
+                elif on_render or not interactive:
+                    print(
+                        "  Non-interactive/Render environment: skipping update "
+                        "(pass --autoupdate to force, or use --no-update).",
+                        flush=True,
+                    )
+                    update = False
+                elif not is_container():
+                    print("  Note: If your terminal is not interactive, you can use the --autoupdate argument to skip this prompt.")
+                    ask = input("  Do you want to update? (y/n): ").strip().lower()
+                    update = ask == "y"
                 else:
                     update = True
                     
