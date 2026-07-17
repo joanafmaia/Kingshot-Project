@@ -8,6 +8,7 @@ pyzipper>=0.3.6
 pytz>=2025.2
 aiohttp-socks>=0.10.1
 python-dotenv>=1.1.0
+psycopg[binary]>=3.2.0
 onnxruntime>=1.18.1
 # Cap below 3.9: newer rapidocr defaults to PP-OCRv6, which drops languages like
 # korean/japan/arabic. Lifting this needs a deliberate move to the new model set.

@@ -150,6 +150,13 @@ except ImportError:
         sys.exit(0)  # .bat / user re-runs; os.execv on Windows can race with the launcher
     os.execv(sys.executable, [sys.executable] + sys.argv)
 
+# Load local .env early so DATABASE_URL is available before DB init.
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    pass
+
 # Python version check
 MIN_PYTHON = (3, 11)
 
@@ -1267,6 +1274,21 @@ if __name__ == "__main__":
         except (OSError, NotImplementedError):
             os.makedirs("db", exist_ok=True)
 
+    # Restore SQLite files from Neon before opening/creating local DBs.
+    try:
+        from cogs.db_cloud_sync import is_cloud_sync_enabled, restore_from_cloud
+        if is_cloud_sync_enabled():
+            startup.phase_start("Restoring databases from Neon")
+            restored = restore_from_cloud()
+            if restored:
+                startup.phase_ok(f"Restored {restored} database file(s) from Neon")
+            else:
+                startup.phase_ok("Neon ready (no remote backups yet — will sync after start)")
+    except Exception as e:
+        # Bot can still run on empty local DBs; sync will retry later.
+        startup.phase_fail("Neon restore failed (bot continues with local DB)", details=[str(e)])
+        print("  Tip: check DATABASE_URL on Render / in .env", flush=True)
+
     databases = {
         "conn_alliance": os.path.join(db_dir, "alliance.sqlite"),
         "conn_giftcode": os.path.join(db_dir, "giftcode.sqlite"),
@@ -1474,7 +1496,7 @@ if __name__ == "__main__":
     startup.phase_ok("Database ready")
 
     async def load_cogs():
-        cogs = ["pimp_my_bot", "process_queue", "onnx_lifecycle", "bot_main_menu", "alliance_sync", "alliance", "alliance_member_operations", "bot_operations", "alliance_logs", "bot_support", "bot_health", "gift_operations", "alliance_history", "alliance_w_command", "bot_startup", "notification_system", "notification_schedule", "alliance_id_channel", "alliance_channels", "bot_backup", "notification_editor", "notification_templates", "notification_wizard", "attendance", "attendance_report", "attendance_ocr", "minister_schedule", "minister_menu", "minister_archive", "alliance_registration", "bear_track"]
+        cogs = ["pimp_my_bot", "process_queue", "onnx_lifecycle", "bot_main_menu", "alliance_sync", "alliance", "alliance_member_operations", "bot_operations", "alliance_logs", "bot_support", "bot_health", "gift_operations", "alliance_history", "alliance_w_command", "bot_startup", "notification_system", "notification_schedule", "alliance_id_channel", "alliance_channels", "bot_backup", "notification_editor", "notification_templates", "notification_wizard", "attendance", "attendance_report", "attendance_ocr", "minister_schedule", "minister_menu", "minister_archive", "alliance_registration", "bear_track", "db_cloud_sync"]
 
         failed_cogs = []
 

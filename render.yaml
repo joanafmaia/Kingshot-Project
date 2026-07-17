@@ -13,5 +13,7 @@ services:
         value: replace-me
       - key: DATABASE_DIR
         value: /data
+      - key: DATABASE_URL
+        sync: false
       - key: PORT
         value: 10000
