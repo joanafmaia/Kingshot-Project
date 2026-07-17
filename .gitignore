@@ -1,0 +1,48 @@
+# Ignore everything by default
+*
+
+# Re-include tracked source files
+!.gitignore
+!LICENSE
+!main.py
+!README.md
+!requirements.txt
+!autoupdateinfo.txt
+!cogs/
+!cogs/*.py
+!.gitlab-ci.yml
+!install/
+!install/*
+!fonts/
+!fonts/*
+!docker/
+!docker/*
+!.github/
+!.github/workflows/
+!.github/workflows/docker.yml
+
+# Local secrets and runtime files
+bot_token.txt
+.env
+.env.*
+
+# Local databases and runtime artifacts
+/db/
+db/
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.log
+
+# Python virtual environment
+bot_venv/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# OS/editor junk
+.DS_Store
+Thumbs.db
+.vscode/

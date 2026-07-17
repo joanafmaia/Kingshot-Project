@@ -1,0 +1,9 @@
+services:
+  kingshot-discord-bot:
+    image: ghcr.io/kingshot-project/kingshot-discord-bot:latest
+    container_name: kingshot-discord-bot
+    volumes:
+      - /opt/docker/kingshot/db/:/app/db
+    restart: unless-stopped
+    environment:
+      - DISCORD_BOT_TOKEN=<your bot token here>

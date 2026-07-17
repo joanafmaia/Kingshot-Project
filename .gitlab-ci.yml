@@ -1,0 +1,22 @@
+# .gitlab-ci.yml
+
+variables:
+  GITHUB_REPO_URL: "https://github.com/kingshot-project/Kingshot-Discord-Bot.git"
+  GIT_STRATEGY: none
+
+sync_from_github:
+  stage: deploy
+  image:
+    name: alpine/git:latest
+    entrypoint: [""]
+  tags:
+    - docker
+
+  script:
+    - echo "Starting clean-room sync..."
+    - git clone --mirror $GITHUB_REPO_URL .
+    - git push --mirror "https://gitlab-ci:${GITLAB_PUSH_TOKEN}@${CI_PROJECT_URL#https://}"
+    - echo "Sync complete."
+
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "trigger"'
