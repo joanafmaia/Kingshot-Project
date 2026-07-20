@@ -17,11 +17,30 @@ logger = logging.getLogger('gift')
 
 PAGE_SIZE = 20
 
-# Reuse the proven RTL helpers shared with bear_track / attendance: an LRM prefix
-# keeps the whole line left-to-right (so icons/numbers/parens stay in order) while
-# each RTL name is wrapped in an FSI…PDI isolate. The local LRI…PDI wrapping did
-# not render LTR in Discord.
-from .bear_track import _isolate_rtl, _ltr_line
+# RTL helpers (kept local so gifts profile does not import bear_track / OCR).
+_RTL_RANGES = (
+    (0x0590, 0x05FF), (0x0600, 0x06FF), (0x0700, 0x074F),
+    (0x0750, 0x077F), (0x08A0, 0x08FF), (0xFB50, 0xFDFF),
+    (0xFE70, 0xFEFF),
+)
+
+
+def _has_rtl(text: str) -> bool:
+    return bool(text) and any(
+        any(lo <= ord(c) <= hi for lo, hi in _RTL_RANGES) for c in text
+    )
+
+
+def _isolate_rtl(text: str) -> str:
+    if not _has_rtl(text):
+        return text or ""
+    return f"\u2068{text}\u2069"
+
+
+def _ltr_line(text: str) -> str:
+    if not text:
+        return text or ""
+    return "\u200e" + text if _has_rtl(text) else text
 
 
 SUCCESS_STATUSES = {"SUCCESS", "SAME TYPE EXCHANGE"}

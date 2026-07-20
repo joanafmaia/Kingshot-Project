@@ -1566,11 +1566,28 @@ async def use_giftcode_for_alliance(cog, alliance_id, giftcode):
         name_result = cog.alliance_cursor.fetchone()
 
         if not channel_result or not name_result:
-            cog.logger.error(f"GiftOps: Could not find channel or name for alliance {alliance_id}.")
+            cog.logger.error(
+                f"GiftOps: Could not find channel or name for alliance {alliance_id}. "
+                f"Set an alliance channel in Alliances settings before redeeming."
+            )
             return False
 
         channel_id, alliance_name = channel_result[0], name_result[0]
+        if not channel_id:
+            cog.logger.error(
+                f"GiftOps: Alliance {alliance_id} ({name_result[0]}) has no channel_id configured."
+            )
+            return False
         channel = cog.bot.get_channel(channel_id)
+        if not channel:
+            try:
+                channel = await cog.bot.fetch_channel(channel_id)
+            except Exception as fetch_err:
+                cog.logger.error(
+                    f"GiftOps: Bot cannot access channel {channel_id} for alliance "
+                    f"{alliance_name}: {fetch_err}"
+                )
+                return False
 
         if not channel:
             cog.logger.error(f"GiftOps: Bot cannot access channel {channel_id} for alliance {alliance_name}.")
@@ -1631,6 +1648,19 @@ async def use_giftcode_for_alliance(cog, alliance_id, giftcode):
             members = users_cursor.fetchall()
         if not members:
             cog.logger.info(f"GiftOps: No members found for alliance {alliance_id} ({alliance_name}).")
+            try:
+                await channel.send(embed=discord.Embed(
+                    title=f"{theme.deniedIcon} Gift Redemption Skipped",
+                    description=(
+                        f"**Gift Code:** `{giftcode}`\n"
+                        f"**Alliance:** `{alliance_name}`\n"
+                        f"**Reason:** No members found for this alliance.\n"
+                        f"Add members first, then redeem again."
+                    ),
+                    color=theme.emColor2,
+                ))
+            except Exception:
+                pass
             return False
 
         total_members = len(members)

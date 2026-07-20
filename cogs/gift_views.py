@@ -778,7 +778,8 @@ class GiftView(discord.ui.View):
                                             f"{queue_info}\n\n"
                                             f"{theme.chartIcon} **Total items in queue:** {queue_status['queue_length']}\n"
                                             f"{theme.pinIcon} **Your position:** #{your_position if your_position else 'Processing'}\n\n"
-                                            f"{theme.infoIcon} You'll receive notifications as each alliance is processed."
+                                            f"{theme.infoIcon} Progress posts in the **alliance channel** "
+                                            f"(not here). Check that channel for live redeem status."
                                         ),
                                         color=theme.emColor3
                                     )
