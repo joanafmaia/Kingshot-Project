@@ -6,6 +6,7 @@ import discord
 from discord.ext import commands
 from datetime import datetime
 import logging
+import os
 import sqlite3
 import asyncio
 from .permission_handler import (
@@ -14,6 +15,19 @@ from .permission_handler import (
 from .pimp_my_bot import theme, safe_edit_message, check_interaction_user
 
 logger = logging.getLogger('bot')
+
+
+def is_gifts_profile() -> bool:
+    """True when BOT_PROFILE=gifts|minimal (alliances + gift codes only)."""
+    return os.environ.get("BOT_PROFILE", "").strip().lower() in ("gifts", "minimal")
+
+
+_GIFTS_MAIN_MENU_IDS = frozenset({
+    "alliance_management",
+    "gift_codes",
+    "permissions_top",
+    "maintenance",
+})
 
 
 def _tier_icon(tier: str) -> str:
@@ -100,9 +114,23 @@ class MainMenu(commands.Cog):
 
     def build_main_menu_embed(self) -> discord.Embed:
         """Single source of truth for the top-level Settings Menu embed."""
-        return discord.Embed(
-            title=f"{theme.settingsIcon} Settings Menu",
-            description=(
+        if is_gifts_profile():
+            description = (
+                f"Welcome to the bot settings. Select a category to get started:\n\n"
+                f"**Menu Categories**\n"
+                f"{theme.upperDivider}\n"
+                f"{theme.allianceIcon} **Alliances**\n"
+                f"└ Manage alliances, members, and registration\n\n"
+                f"{theme.giftIcon} **Gift Codes**\n"
+                f"└ Manage gift codes and rewards\n\n"
+                f"{theme.lockIcon} **Permissions**\n"
+                f"└ Manage bot administrators (Global Admin only)\n\n"
+                f"{theme.robotIcon} **Maintenance**\n"
+                f"└ Updates, backups, and support\n"
+                f"{theme.lowerDivider}"
+            )
+        else:
+            description = (
                 f"Welcome to the bot settings. Select a category to get started:\n\n"
                 f"**Menu Categories**\n"
                 f"{theme.upperDivider}\n"
@@ -125,7 +153,10 @@ class MainMenu(commands.Cog):
                 f"{theme.robotIcon} **Maintenance**\n"
                 f"└ Updates, backups, and support\n"
                 f"{theme.lowerDivider}"
-            ),
+            )
+        return discord.Embed(
+            title=f"{theme.settingsIcon} Settings Menu",
+            description=description,
             color=theme.emColor1,
         )
 
@@ -396,9 +427,27 @@ class MainMenu(commands.Cog):
         try:
             _, is_global = PermissionManager.is_admin(interaction.user.id)
 
-            embed = discord.Embed(
-                title=f"{theme.robotIcon} Maintenance",
-                description=(
+            if is_gifts_profile():
+                description = (
+                    f"Bot maintenance and support options:\n\n"
+                    f"**Available Operations**\n"
+                    f"{theme.upperDivider}\n"
+                    f"{theme.refreshIcon} **Check for Updates**\n"
+                    f"└ Check for and install bot updates (Global Admin only)\n\n"
+                    f"{theme.archiveIcon} **Backup System**\n"
+                    f"└ Create / view / clean local + DM backups (Global Admin only)\n\n"
+                    f"{theme.heartIcon} **Bot Health**\n"
+                    f"└ API status, DB health, system info, restart, cleanup tools (Global Admin only)\n\n"
+                    f"{theme.robotIcon} **Bot Presence**\n"
+                    f"└ Set the bot's Discord activity status (Global Admin only)\n\n"
+                    f"{theme.supportIcon} **Request Support**\n"
+                    f"└ Open a support DM with logs attached\n\n"
+                    f"{theme.infoIcon} **About Project**\n"
+                    f"└ View project info, links, and credits\n"
+                    f"{theme.lowerDivider}"
+                )
+            else:
+                description = (
                     f"Bot maintenance and support options:\n\n"
                     f"**Available Operations**\n"
                     f"{theme.upperDivider}\n"
@@ -417,7 +466,11 @@ class MainMenu(commands.Cog):
                     f"{theme.infoIcon} **About Project**\n"
                     f"└ View project info, links, and credits\n"
                     f"{theme.lowerDivider}"
-                ),
+                )
+
+            embed = discord.Embed(
+                title=f"{theme.robotIcon} Maintenance",
+                description=description,
                 color=theme.emColor1
             )
 
@@ -434,11 +487,21 @@ class MainMenu(commands.Cog):
 # ============================================================================
 
 class MainMenuView(discord.ui.View):
-    """Main menu with 8 category buttons."""
+    """Main menu with category buttons (filtered in gifts profile)."""
 
     def __init__(self, cog):
         super().__init__(timeout=None)
         self.cog = cog
+        if is_gifts_profile():
+            keep = [
+                child for child in list(self.children)
+                if isinstance(child, discord.ui.Button)
+                and child.custom_id in _GIFTS_MAIN_MENU_IDS
+            ]
+            self.clear_items()
+            for i, child in enumerate(keep):
+                child.row = 0 if i < 2 else 1
+                self.add_item(child)
 
     @discord.ui.button(
         label="Alliances",
@@ -2129,6 +2192,13 @@ class MaintenanceView(discord.ui.View):
         for child in self.children:
             if isinstance(child, discord.ui.Button) and child.custom_id in global_only:
                 child.disabled = not is_global
+
+        # Gifts profile: OCR is not loaded — hide External OCR controls.
+        if is_gifts_profile():
+            for child in list(self.children):
+                if isinstance(child, discord.ui.Button) and child.custom_id == "toggle_remote_ocr":
+                    self.remove_item(child)
+            return
 
         # Reflect current External OCR state on its toggle (dynamic label/style).
         try:

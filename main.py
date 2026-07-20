@@ -565,20 +565,34 @@ def install_onnxruntime_stable(version_spec="onnxruntime>=1.18.1"):
         cmd.append("--break-system-packages")
     subprocess.check_call(cmd, timeout=1200, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=_pip_env())
 
+def get_active_requirements_file() -> str:
+    """Return requirements file for the current BOT_PROFILE."""
+    profile = os.environ.get("BOT_PROFILE", "").strip().lower()
+    if profile in ("gifts", "minimal") and os.path.exists("requirements-gifts.txt"):
+        return "requirements-gifts.txt"
+    return "requirements.txt"
+
+
+def _requirement_package_name(requirement: str) -> str:
+    name = requirement.split("==")[0].split(">=")[0].split("<=")[0].split("~=")[0].split("!=")[0]
+    return name.split("[")[0].strip()
+
+
 def check_and_install_requirements():
     """Check each requirement and install missing ones."""
-    if not os.path.exists("requirements.txt"):
+    requirements_file = get_active_requirements_file()
+    if not os.path.exists(requirements_file):
         return False
 
     # Read requirements
-    with open("requirements.txt", "r") as f:
+    with open(requirements_file, "r") as f:
         requirements = [line.strip() for line in f if line.strip() and not line.startswith("#")]
     
     missing_packages = []
     
     # Test each requirement
     for requirement in requirements:
-        package_name = requirement.split("==")[0].split(">=")[0].split("<=")[0].split("~=")[0].split("!=")[0]
+        package_name = _requirement_package_name(requirement)
         
         try:
             if package_name == "discord.py":
@@ -595,6 +609,8 @@ def check_and_install_requirements():
                 import PIL
             elif package_name.lower() == "numpy":
                 import numpy
+            elif package_name.lower() == "psycopg":
+                import psycopg
             elif package_name.lower() == "onnxruntime":
                 _import_onnxruntime_quietly()
                 # Check if we need to switch versions based on Python version
@@ -614,7 +630,7 @@ def check_and_install_requirements():
         startup.phase_start("Installing missing packages")
 
         for package in missing_packages:
-            package_name = package.split("==")[0].split(">=")[0].split("<=")[0].split("~=")[0].split("!=")[0]
+            package_name = _requirement_package_name(package)
 
             # Handle onnxruntime specially based on Python version
             if package_name.lower() == "onnxruntime":
@@ -638,11 +654,11 @@ def check_and_install_requirements():
                     tail = (result.stdout or "").strip().splitlines()[-15:]
                     startup.phase_fail("Dependencies failed",
                                        details=[f"Failed to install {package} (pip exit {result.returncode}):", *tail],
-                                       fix="pip install -r requirements.txt")
+                                       fix=f"pip install -r {requirements_file}")
                     return False
 
             except Exception as e:
-                startup.phase_fail("Dependencies failed", details=[f"Failed to install {package}: {e}"], fix="pip install -r requirements.txt")
+                startup.phase_fail("Dependencies failed", details=[f"Failed to install {package}: {e}"], fix=f"pip install -r {requirements_file}")
                 return False
 
     startup.phase_ok("Dependencies satisfied")
@@ -683,22 +699,33 @@ def ensure_opencv_headless():
 def setup_dependencies(beta_mode=False):
     """Main function to set up all dependencies."""
     startup.phase_start("Checking dependencies")
+    requirements_file = get_active_requirements_file()
+    gifts_profile = os.environ.get("BOT_PROFILE", "").strip().lower() in ("gifts", "minimal")
 
     removed_obsolete = False
-    if has_obsolete_requirements():
+    if not gifts_profile and has_obsolete_requirements():
         removed_obsolete = True
         safe_remove("requirements.txt", is_dir=False)
 
-    if not os.path.exists("requirements.txt"):
+    if gifts_profile:
+        if not os.path.exists("requirements-gifts.txt"):
+            startup.phase_fail(
+                "Dependencies failed",
+                details=["requirements-gifts.txt missing for BOT_PROFILE=gifts"],
+                fix="Restore requirements-gifts.txt from the repo",
+            )
+            return False
+    elif not os.path.exists("requirements.txt"):
         if not download_requirements_from_release(beta_mode=beta_mode):
             startup.phase_fail("Dependencies failed", details=["Could not download requirements.txt"], fix="Download the complete bot package from: https://github.com/kingshot-project/Kingshot-Discord-Bot/releases")
             return False
 
     if not check_and_install_requirements():
-        startup.phase_fail("Dependencies failed", fix="pip install -r requirements.txt")
+        startup.phase_fail("Dependencies failed", fix=f"pip install -r {requirements_file}")
         return False
 
-    ensure_opencv_headless()
+    if not gifts_profile:
+        ensure_opencv_headless()
     return True
 
 beta_mode = "--beta" in sys.argv
@@ -1511,7 +1538,34 @@ if __name__ == "__main__":
     startup.phase_ok("Database ready")
 
     async def load_cogs():
-        cogs = ["pimp_my_bot", "process_queue", "onnx_lifecycle", "bot_main_menu", "alliance_sync", "alliance", "alliance_member_operations", "bot_operations", "alliance_logs", "bot_support", "bot_health", "gift_operations", "alliance_history", "alliance_w_command", "bot_startup", "notification_system", "notification_schedule", "alliance_id_channel", "alliance_channels", "bot_backup", "notification_editor", "notification_templates", "notification_wizard", "attendance", "attendance_report", "attendance_ocr", "minister_schedule", "minister_menu", "minister_archive", "alliance_registration", "bear_track", "db_cloud_sync"]
+        # BOT_PROFILE=gifts (or minimal): alliances + gift codes only — skips OCR /
+        # notifications / attendance / bear / ministers to fit low-RAM hosts.
+        profile = os.environ.get("BOT_PROFILE", "").strip().lower()
+        cogs_full = [
+            "pimp_my_bot", "process_queue", "onnx_lifecycle", "bot_main_menu",
+            "alliance_sync", "alliance", "alliance_member_operations", "bot_operations",
+            "alliance_logs", "bot_support", "bot_health", "gift_operations",
+            "alliance_history", "alliance_w_command", "bot_startup",
+            "notification_system", "notification_schedule", "alliance_id_channel",
+            "alliance_channels", "bot_backup", "notification_editor",
+            "notification_templates", "notification_wizard", "attendance",
+            "attendance_report", "attendance_ocr", "minister_schedule",
+            "minister_menu", "minister_archive", "alliance_registration",
+            "bear_track", "db_cloud_sync",
+        ]
+        cogs_gifts = [
+            "pimp_my_bot", "process_queue", "bot_main_menu", "alliance_sync",
+            "alliance", "alliance_member_operations", "bot_operations",
+            "alliance_logs", "bot_support", "bot_health", "gift_operations",
+            "alliance_history", "alliance_w_command", "bot_startup",
+            "alliance_id_channel", "alliance_channels", "bot_backup",
+            "alliance_registration", "db_cloud_sync",
+        ]
+        if profile in ("gifts", "minimal"):
+            cogs = cogs_gifts
+            startup.phase_ok("Profile: gifts (alliances + gift codes)")
+        else:
+            cogs = cogs_full
 
         failed_cogs = []
 
@@ -1591,26 +1645,30 @@ if __name__ == "__main__":
                     startup.api_status("Gift Code Redemption API", "error", "Check failed")
 
                 # OCR status last, after both API checks, for a clean order.
-                try:
-                    from cogs.bear_track import remote_ocr_url, OCR_REMOTE_TOKEN
-                    ocr_url = remote_ocr_url()
-                    if not ocr_url:
-                        startup.phase_ok("Using local OCR")
-                    else:
-                        startup.phase_start("Checking External OCR Service")
-                        try:
-                            async with _aio.ClientSession(timeout=timeout) as ocr_session:
-                                async with ocr_session.get(
-                                    f"{ocr_url}/health",
-                                    headers={"X-API-Key": OCR_REMOTE_TOKEN},
-                                ) as resp:
-                                    ok = resp.status == 200
-                                    ocr_detail = None if ok else f"HTTP {resp.status}"
-                            startup.api_status("External OCR Service", "ok" if ok else "error", ocr_detail)
-                        except Exception:
-                            startup.api_status("External OCR Service", "error", "Unreachable (using local OCR)")
-                except Exception:
-                    pass
+                profile = os.environ.get("BOT_PROFILE", "").strip().lower()
+                if profile in ("gifts", "minimal"):
+                    startup.phase_ok("OCR disabled (gifts profile)")
+                else:
+                    try:
+                        from cogs.bear_track import remote_ocr_url, OCR_REMOTE_TOKEN
+                        ocr_url = remote_ocr_url()
+                        if not ocr_url:
+                            startup.phase_ok("Using local OCR")
+                        else:
+                            startup.phase_start("Checking External OCR Service")
+                            try:
+                                async with _aio.ClientSession(timeout=timeout) as ocr_session:
+                                    async with ocr_session.get(
+                                        f"{ocr_url}/health",
+                                        headers={"X-API-Key": OCR_REMOTE_TOKEN},
+                                    ) as resp:
+                                        ok = resp.status == 200
+                                        ocr_detail = None if ok else f"HTTP {resp.status}"
+                                startup.api_status("External OCR Service", "ok" if ok else "error", ocr_detail)
+                            except Exception:
+                                startup.api_status("External OCR Service", "error", "Unreachable (using local OCR)")
+                    except Exception:
+                        pass
             except Exception:
                 pass
 

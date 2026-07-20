@@ -757,8 +757,12 @@ class BotHealth(commands.Cog):
         }
 
     def get_requirements_health(self) -> dict:
-        """Check installed packages against requirements.txt"""
-        requirements_file = "requirements.txt"
+        """Check installed packages against the active requirements file."""
+        profile = os.environ.get("BOT_PROFILE", "").strip().lower()
+        if profile in ("gifts", "minimal") and os.path.isfile("requirements-gifts.txt"):
+            requirements_file = "requirements-gifts.txt"
+        else:
+            requirements_file = "requirements.txt"
         missing = []
         outdated = []
         ok_count = 0
@@ -771,7 +775,7 @@ class BotHealth(commands.Cog):
                     'outdated': [],
                     'ok_count': 0,
                     'total': 0,
-                    'error': 'requirements.txt not found'
+                    'error': f'{requirements_file} not found'
                 }
 
             with open(requirements_file, 'r') as f:
@@ -1553,7 +1557,11 @@ class BotHealth(commands.Cog):
                             db_health: dict, log_health: dict, system_health: dict,
                             requirements: dict | None = None) -> discord.Embed:
         """Build the health dashboard embed."""
-        from . import onnx_lifecycle
+        try:
+            from . import onnx_lifecycle
+            ocr_lines = onnx_lifecycle.get_status_lines()
+        except Exception:
+            ocr_lines = []
 
         overall_text = (
             "Healthy" if overall == STATUS_HEALTHY
@@ -1590,9 +1598,10 @@ class BotHealth(commands.Cog):
                         f"({', '.join(parts)})"
                     )
 
-        ocr_status, ocr_summary = self._build_ocr_summary(
-            onnx_lifecycle.get_status_lines()
-        )
+        ocr_status, ocr_summary = self._build_ocr_summary(ocr_lines)
+        if os.environ.get("BOT_PROFILE", "").strip().lower() in ("gifts", "minimal"):
+            ocr_status = STATUS_HEALTHY
+            ocr_summary = "disabled (gifts profile)"
         disk_health = self.get_disk_health()
         disk_msg = disk_health['message']
 

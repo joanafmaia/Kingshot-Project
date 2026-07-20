@@ -3,7 +3,7 @@ services:
     name: kingshot-discord-bot
     env: python
     plan: free
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install -r requirements-gifts.txt
     startCommand: python main.py --no-update
     healthCheckPath: /health
     envVars:
@@ -15,5 +15,9 @@ services:
         value: /data
       - key: DATABASE_URL
         sync: false
+      - key: BOT_PROFILE
+        value: gifts
+      - key: BOT_LOW_MEM
+        value: "1"
       - key: PORT
         value: 10000
