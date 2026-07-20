@@ -271,7 +271,10 @@ class AllianceIDChannel(commands.Cog):
                     existing_alliance_id = int(existing_alliance[0]) if existing_alliance[0] else None
                     if existing_alliance_id == alliance_id:
                         await message.add_reaction(theme.warnIcon)
-                        await message.reply(f"This ID ({fid}) is already registered in this alliance!", delete_after=delete_after)
+                        # Keep reply permanent so the member can see they are already listed.
+                        await message.reply(
+                            f"{theme.warnIcon} This ID (`{fid}`) is already registered in this alliance!"
+                        )
                         return
 
                     with sqlite3.connect('db/alliance.sqlite') as alliance_db:
@@ -282,8 +285,7 @@ class AllianceIDChannel(commands.Cog):
                     if alliance_name:
                         await message.add_reaction(theme.warnIcon)
                         await message.reply(
-                            f"This ID ({fid}) is already registered in another alliance: `{alliance_name[0]}`",
-                            delete_after=delete_after
+                            f"{theme.warnIcon} This ID (`{fid}`) is already registered in another alliance: `{alliance_name[0]}`"
                         )
                         return
 
@@ -353,7 +355,9 @@ class AllianceIDChannel(commands.Cog):
                         cursor.execute("SELECT alliance FROM users WHERE fid = ?", (fid,))
                         if cursor.fetchone():
                             await message.add_reaction(theme.warnIcon)
-                            await message.reply(f"This ID ({fid}) was added by another process!", delete_after=delete_after)
+                            await message.reply(
+                                f"{theme.warnIcon} This ID (`{fid}`) is already registered in this alliance!"
+                            )
                             return
 
                         cursor.execute("""
@@ -363,7 +367,9 @@ class AllianceIDChannel(commands.Cog):
                         users_db.commit()
                 except sqlite3.IntegrityError:
                     await message.add_reaction(theme.warnIcon)
-                    await message.reply(f"This ID ({fid}) was added by another process!", delete_after=delete_after)
+                    await message.reply(
+                        f"{theme.warnIcon} This ID (`{fid}`) is already registered in this alliance!"
+                    )
                     return
 
                 await message.add_reaction(theme.verifiedIcon)
