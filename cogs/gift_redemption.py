@@ -21,6 +21,19 @@ from .browser_headers import get_headers
 from .process_queue import GIFT_VALIDATE, GIFT_REDEEM, PreemptedException
 
 
+async def _send_silent(channel, *, embed=None, content=None):
+    """Post without Discord push notification (@silent). Progress embeds still show in-channel."""
+    kwargs = {}
+    if embed is not None:
+        kwargs["embed"] = embed
+    if content is not None:
+        kwargs["content"] = content
+    try:
+        return await channel.send(**kwargs, silent=True)
+    except TypeError:
+        return await channel.send(**kwargs)
+
+
 async def enqueue_validation(cog, giftcode, source, message=None, channel=None):
     """Enqueue a gift code validation operation in the ProcessQueue."""
 
@@ -211,13 +224,20 @@ async def handle_gift_redeem_process(cog, process):
     await _record_batch_start(cog, batch_id, alliance_id)
 
     try:
-        await use_giftcode_for_alliance(cog, alliance_id, giftcode)
+        ok = await use_giftcode_for_alliance(cog, alliance_id, giftcode)
     except PreemptedException:
         raise
     except Exception as e:
         cog.logger.exception(f"Error in redemption for alliance {alliance_id}: {e}")
         await _record_batch_result(cog, batch_id, alliance_id, success=False)
         raise
+
+    if not ok:
+        await _record_batch_result(cog, batch_id, alliance_id, success=False)
+        raise RuntimeError(
+            f"Gift redemption skipped for alliance {alliance_id} code '{giftcode}' "
+            f"(missing channel, inaccessible channel, or no members — check alliance Channel Setup / Settings)."
+        )
 
     await _record_batch_result(cog, batch_id, alliance_id, success=True)
 
@@ -752,7 +772,7 @@ async def post_redemption_summary(cog, channel, alliance_id, alliance_name, gift
     async def _post(embed):
         try:
             try:
-                await channel.send(embed=embed, silent=True)
+                await _send_silent(channel, embed=embed)
             except TypeError:  # older discord.py without silent=
                 await channel.send(embed=embed)
         except Exception as e:
@@ -1565,19 +1585,51 @@ async def use_giftcode_for_alliance(cog, alliance_id, giftcode):
         cog.alliance_cursor.execute("SELECT name FROM alliance_list WHERE alliance_id = ?", (alliance_id,))
         name_result = cog.alliance_cursor.fetchone()
 
-        if not channel_result or not name_result:
+        if not name_result:
+            cog.logger.error(f"GiftOps: Alliance {alliance_id} not found in alliance_list.")
+            return False
+
+        alliance_name = name_result[0]
+        channel_id = channel_result[0] if channel_result else None
+
+        # Fallback: gift-code channel, then alliance log channel.
+        if not channel_id:
+            try:
+                cog.cursor.execute(
+                    "SELECT channel_id FROM giftcode_channel WHERE alliance_id = ?",
+                    (alliance_id,),
+                )
+                row = cog.cursor.fetchone()
+                if row and row[0]:
+                    channel_id = row[0]
+                    cog.logger.warning(
+                        f"GiftOps: alliancesettings.channel_id missing for {alliance_name}; "
+                        f"using giftcode_channel {channel_id}"
+                    )
+            except Exception:
+                pass
+        if not channel_id:
+            try:
+                with sqlite3.connect('db/settings.sqlite') as sconn:
+                    row = sconn.execute(
+                        "SELECT channel_id FROM alliance_logs WHERE alliance_id = ?",
+                        (alliance_id,),
+                    ).fetchone()
+                    if row and row[0]:
+                        channel_id = row[0]
+                        cog.logger.warning(
+                            f"GiftOps: using alliance_logs channel {channel_id} for {alliance_name}"
+                        )
+            except Exception:
+                pass
+
+        if not channel_id:
             cog.logger.error(
-                f"GiftOps: Could not find channel or name for alliance {alliance_id}. "
-                f"Set an alliance channel in Alliances settings before redeeming."
+                f"GiftOps: Alliance {alliance_id} ({alliance_name}) has no progress channel. "
+                f"Set one in Alliances → Channel Setup / Settings (sync channel)."
             )
             return False
 
-        channel_id, alliance_name = channel_result[0], name_result[0]
-        if not channel_id:
-            cog.logger.error(
-                f"GiftOps: Alliance {alliance_id} ({name_result[0]}) has no channel_id configured."
-            )
-            return False
         channel = cog.bot.get_channel(channel_id)
         if not channel:
             try:
@@ -1638,7 +1690,7 @@ async def use_giftcode_for_alliance(cog, alliance_id, giftcode):
                 ),
                 color=theme.emColor2
             )
-            await channel.send(embed=error_embed)
+            await _send_silent(channel, embed=error_embed)
             return False
 
         # Get Members
@@ -1649,7 +1701,7 @@ async def use_giftcode_for_alliance(cog, alliance_id, giftcode):
         if not members:
             cog.logger.info(f"GiftOps: No members found for alliance {alliance_id} ({alliance_name}).")
             try:
-                await channel.send(embed=discord.Embed(
+                await _send_silent(channel, embed=discord.Embed(
                     title=f"{theme.deniedIcon} Gift Redemption Skipped",
                     description=(
                         f"**Gift Code:** `{giftcode}`\n"
@@ -1740,7 +1792,7 @@ async def use_giftcode_for_alliance(cog, alliance_id, giftcode):
 
             return base_description
         embed.description = update_embed_description()
-        try: status_message = await channel.send(embed=embed)
+        try: status_message = await _send_silent(channel, embed=embed)
         except Exception as e: cog.logger.exception(f"GiftOps: Error sending initial status embed: {e}"); return False
 
         # Main Processing Loop
@@ -2034,6 +2086,10 @@ async def use_giftcode_for_alliance(cog, alliance_id, giftcode):
         cog.logger.exception(f"GiftOps: UNEXPECTED ERROR in use_giftcode_for_alliance for {alliance_id}/{giftcode}: {str(e)}")
         cog.logger.exception(f"Traceback: {traceback.format_exc()}")
         try:
-            if 'channel' in locals() and channel: await channel.send(f"{theme.warnIcon} An unexpected error occurred processing `{giftcode}` for {alliance_name}.")
+            if 'channel' in locals() and channel:
+                await _send_silent(
+                    channel,
+                    content=f"{theme.warnIcon} An unexpected error occurred processing `{giftcode}` for {alliance_name}.",
+                )
         except Exception: pass
         return False
