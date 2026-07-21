@@ -373,22 +373,6 @@ class BotStartup(commands.Cog):
                 admin_user = await self.bot.fetch_user(admin_id)
                 
                 if admin_user:
-                    # OCR readiness — Kingshot uses ONNX for Bear Track and attendance OCR
-                    ocr_status = f"{theme.deniedIcon}"
-                    ocr_details = "OCR runtime not available"
-                    if os.environ.get("BOT_PROFILE", "").strip().lower() in ("gifts", "minimal"):
-                        ocr_status = f"{theme.verifiedIcon}"
-                        ocr_details = "OCR disabled (gifts profile)"
-                    else:
-                        try:
-                            import onnxruntime  # noqa: F401
-                            ocr_status = f"{theme.verifiedIcon}"
-                            ocr_details = "OCR runtime ready"
-                        except ImportError:
-                            ocr_details = "onnxruntime not installed"
-                        except Exception as e:
-                            ocr_details = f"OCR check failed: {str(e)[:30]}"
-
                     status_embed = discord.Embed(
                         title=f"{theme.robotIcon} Bot Successfully Activated",
                         description=(
@@ -397,7 +381,6 @@ class BotStartup(commands.Cog):
                             f"{theme.verifiedIcon} Bot is now online and operational\n"
                             f"{theme.verifiedIcon} Database connections established\n"
                             f"{theme.verifiedIcon} Command systems initialized\n"
-                            f"{ocr_status} {ocr_details}\n"
                             f"{theme.middleDivider}\n"
                         ),
                         color=discord.Color.green()

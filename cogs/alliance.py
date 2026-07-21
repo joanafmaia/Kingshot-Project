@@ -292,70 +292,16 @@ class Alliance(commands.Cog):
         await interaction.response.send_message(embed=embed, view=view)
 
     async def show_alliance_operations(self, interaction: discord.Interaction):
-        """Display the Alliance Operations menu (Add/Edit/Delete/View alliances)."""
-        try:
-            embed = discord.Embed(
-                title=f"{theme.allianceIcon} Alliance Operations",
-                description=(
-                    f"Please select an operation:\n\n"
-                    f"**Available Operations**\n"
-                    f"{theme.upperDivider}\n"
-                    f"{theme.addIcon} **Add Alliance**\n"
-                    f"└ Create a new alliance\n\n"
-                    f"{theme.editListIcon} **Edit Alliance**\n"
-                    f"└ Modify existing alliance settings\n\n"
-                    f"{theme.trashIcon} **Delete Alliance**\n"
-                    f"└ Remove an existing alliance\n\n"
-                    f"{theme.eyesIcon} **View Alliances**\n"
-                    f"└ List all available alliances\n"
-                    f"{theme.lowerDivider}"
-                ),
-                color=theme.emColor1
+        """Legacy entry point — redirect to the current Alliances menu."""
+        main_menu_cog = self.bot.get_cog("MainMenu")
+        if main_menu_cog:
+            await main_menu_cog.show_alliance_management(interaction)
+            return
+        if not interaction.response.is_done():
+            await interaction.response.send_message(
+                f"{theme.deniedIcon} Alliances menu not available.",
+                ephemeral=True,
             )
-
-            view = discord.ui.View()
-            view.add_item(discord.ui.Button(
-                label="Add Alliance",
-                emoji=theme.addIcon,
-                style=discord.ButtonStyle.success,
-                custom_id="add_alliance"
-            ))
-            view.add_item(discord.ui.Button(
-                label="Edit Alliance",
-                emoji=theme.editListIcon,
-                style=discord.ButtonStyle.primary,
-                custom_id="edit_alliance"
-            ))
-            view.add_item(discord.ui.Button(
-                label="Delete Alliance",
-                emoji=theme.trashIcon,
-                style=discord.ButtonStyle.danger,
-                custom_id="delete_alliance"
-            ))
-            view.add_item(discord.ui.Button(
-                label="View Alliances",
-                emoji=theme.eyesIcon,
-                style=discord.ButtonStyle.primary,
-                custom_id="view_alliances"
-            ))
-            view.add_item(discord.ui.Button(
-                label="Check Alliance",
-                emoji=theme.searchIcon,
-                style=discord.ButtonStyle.primary,
-                custom_id="check_alliance"
-            ))
-            view.add_item(discord.ui.Button(
-                label="Back",
-                emoji=theme.backIcon,
-                style=discord.ButtonStyle.secondary,
-                custom_id="back_to_alliance_management"
-            ))
-
-            await safe_edit_message(interaction, embed=embed, view=view, content=None)
-
-        except Exception as e:
-            logger.error(f"Error in show_alliance_operations: {e}")
-            print(f"Error in show_alliance_operations: {e}")
 
     async def show_add_alliance_for(self, interaction: discord.Interaction):
         """Direct entry to Add Alliance flow (no operations sub-menu)."""

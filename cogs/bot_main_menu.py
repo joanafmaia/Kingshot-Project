@@ -6,7 +6,6 @@ import discord
 from discord.ext import commands
 from datetime import datetime
 import logging
-import os
 import sqlite3
 import asyncio
 from .permission_handler import (
@@ -15,19 +14,6 @@ from .permission_handler import (
 from .pimp_my_bot import theme, safe_edit_message, check_interaction_user
 
 logger = logging.getLogger('bot')
-
-
-def is_gifts_profile() -> bool:
-    """True when BOT_PROFILE=gifts|minimal (alliances + gift codes only)."""
-    return os.environ.get("BOT_PROFILE", "").strip().lower() in ("gifts", "minimal")
-
-
-_GIFTS_MAIN_MENU_IDS = frozenset({
-    "alliance_management",
-    "gift_codes",
-    "permissions_top",
-    "maintenance",
-})
 
 
 def _tier_icon(tier: str) -> str:
@@ -114,46 +100,20 @@ class MainMenu(commands.Cog):
 
     def build_main_menu_embed(self) -> discord.Embed:
         """Single source of truth for the top-level Settings Menu embed."""
-        if is_gifts_profile():
-            description = (
-                f"Welcome to the bot settings. Select a category to get started:\n\n"
-                f"**Menu Categories**\n"
-                f"{theme.upperDivider}\n"
-                f"{theme.allianceIcon} **Alliances**\n"
-                f"└ Manage alliances, members, and registration\n\n"
-                f"{theme.giftIcon} **Gift Codes**\n"
-                f"└ Manage gift codes and rewards\n\n"
-                f"{theme.lockIcon} **Permissions**\n"
-                f"└ Manage bot administrators (Global Admin only)\n\n"
-                f"{theme.robotIcon} **Maintenance**\n"
-                f"└ Updates, backups, and support\n"
-                f"{theme.lowerDivider}"
-            )
-        else:
-            description = (
-                f"Welcome to the bot settings. Select a category to get started:\n\n"
-                f"**Menu Categories**\n"
-                f"{theme.upperDivider}\n"
-                f"{theme.allianceIcon} **Alliances**\n"
-                f"└ Manage alliances, members, and registration\n\n"
-                f"{theme.giftIcon} **Gift Codes**\n"
-                f"└ Manage gift codes and rewards\n\n"
-                f"{theme.bellIcon} **Notifications**\n"
-                f"└ Event notification system for Bear, KE, and more\n\n"
-                f"{theme.listIcon} **Attendance**\n"
-                f"└ Track and export event attendance\n\n"
-                f"{theme.chartIcon} **Bear Tracking**\n"
-                f"└ Track bear hunt damage and view statistics\n\n"
-                f"{theme.ministerIcon} **Minister Scheduling**\n"
-                f"└ Manage state minister appointments\n\n"
-                f"{theme.paletteIcon} **Themes**\n"
-                f"└ Customize bot icons and colors\n\n"
-                f"{theme.lockIcon} **Permissions**\n"
-                f"└ Manage bot administrators (Global Admin only)\n\n"
-                f"{theme.robotIcon} **Maintenance**\n"
-                f"└ Updates, backups, and support\n"
-                f"{theme.lowerDivider}"
-            )
+        description = (
+            f"Welcome to the bot settings. Select a category to get started:\n\n"
+            f"**Menu Categories**\n"
+            f"{theme.upperDivider}\n"
+            f"{theme.allianceIcon} **Alliances**\n"
+            f"└ Manage alliances, members, and registration\n\n"
+            f"{theme.giftIcon} **Gift Codes**\n"
+            f"└ Manage gift codes and rewards\n\n"
+            f"{theme.lockIcon} **Permissions**\n"
+            f"└ Manage bot administrators (Global Admin only)\n\n"
+            f"{theme.robotIcon} **Maintenance**\n"
+            f"└ Updates, backups, and support\n"
+            f"{theme.lowerDivider}"
+        )
         return discord.Embed(
             title=f"{theme.settingsIcon} Settings Menu",
             description=description,
@@ -347,22 +307,12 @@ class MainMenu(commands.Cog):
                     f"to a different alliance.\n\n"
                     f"**Actions**\n"
                     f"{theme.upperDivider}\n"
-                    f"{theme.membersIcon} **Manage Members**\n"
-                    f"└ View, add, transfer, export and remove members\n\n"
-                    f"{theme.announceIcon} **Channel Setup**\n"
-                    f"└ Configure alliance channels: ID, Sync, Log\n\n"
-                    f"{theme.settingsIcon} **Settings**\n"
-                    f"└ Sync interval, auto-removal on transfer, notifications, logs\n\n"
-                    f"{theme.editListIcon} **Edit Name**\n"
-                    f"└ Rename this alliance\n\n"
-                    f"{theme.globeIcon} **Set Kingdom**\n"
-                    f"└ Lock this alliance to one Kingdom (rejects mismatched adds)\n\n"
-                    f"{theme.listIcon} **History**\n"
-                    f"└ Town Center level and nickname change history per member\n\n"
-                    f"{theme.chartIcon} **Power Rankings**\n"
-                    f"└ Members ranked by power, with combat power and attendance\n\n"
+                    f"{theme.membersIcon} **Manage Members** — add, transfer, export, remove\n"
+                    f"{theme.announceIcon} **Channel Setup** — ID, Sync and Log channels\n"
+                    f"{theme.settingsIcon} **Settings** — sync interval and related options\n"
+                    f"{theme.editListIcon} **Edit Name** / {theme.globeIcon} **Set Kingdom**\n"
+                    f"{theme.listIcon} **History** / {theme.chartIcon} **Power Rankings**\n"
                     f"{theme.trashIcon} **Delete Alliance**\n"
-                    f"└ Permanently remove this alliance and all related data\n"
                     f"{theme.lowerDivider}"
                 ),
                 color=theme.emColor1,
@@ -427,46 +377,24 @@ class MainMenu(commands.Cog):
         try:
             _, is_global = PermissionManager.is_admin(interaction.user.id)
 
-            if is_gifts_profile():
-                description = (
-                    f"Bot maintenance and support options:\n\n"
-                    f"**Available Operations**\n"
-                    f"{theme.upperDivider}\n"
-                    f"{theme.refreshIcon} **Check for Updates**\n"
-                    f"└ Check for and install bot updates (Global Admin only)\n\n"
-                    f"{theme.archiveIcon} **Backup System**\n"
-                    f"└ Create / view / clean local + DM backups (Global Admin only)\n\n"
-                    f"{theme.heartIcon} **Bot Health**\n"
-                    f"└ API status, DB health, system info, restart, cleanup tools (Global Admin only)\n\n"
-                    f"{theme.robotIcon} **Bot Presence**\n"
-                    f"└ Set the bot's Discord activity status (Global Admin only)\n\n"
-                    f"{theme.supportIcon} **Request Support**\n"
-                    f"└ Open a support DM with logs attached\n\n"
-                    f"{theme.infoIcon} **About Project**\n"
-                    f"└ View project info, links, and credits\n"
-                    f"{theme.lowerDivider}"
-                )
-            else:
-                description = (
-                    f"Bot maintenance and support options:\n\n"
-                    f"**Available Operations**\n"
-                    f"{theme.upperDivider}\n"
-                    f"{theme.refreshIcon} **Check for Updates**\n"
-                    f"└ Check for and install bot updates (Global Admin only)\n\n"
-                    f"{theme.archiveIcon} **Backup System**\n"
-                    f"└ Create / view / clean local + DM backups (Global Admin only)\n\n"
-                    f"{theme.heartIcon} **Bot Health**\n"
-                    f"└ API status, DB health, system info, restart, cleanup tools (Global Admin only)\n\n"
-                    f"{theme.robotIcon} **Bot Presence**\n"
-                    f"└ Set the bot's Discord activity status (Global Admin only)\n\n"
-                    f"{theme.globeIcon} **External OCR Service**\n"
-                    f"└ Set the OCR service URL, or blank for local OCR (Global Admin only)\n\n"
-                    f"{theme.supportIcon} **Request Support**\n"
-                    f"└ Open a support DM with logs attached\n\n"
-                    f"{theme.infoIcon} **About Project**\n"
-                    f"└ View project info, links, and credits\n"
-                    f"{theme.lowerDivider}"
-                )
+            description = (
+                f"Bot maintenance and support options:\n\n"
+                f"**Available Operations**\n"
+                f"{theme.upperDivider}\n"
+                f"{theme.refreshIcon} **Check for Updates**\n"
+                f"└ Check for and install bot updates (Global Admin only)\n\n"
+                f"{theme.archiveIcon} **Backup System**\n"
+                f"└ Create / view / clean local + DM backups (Global Admin only)\n\n"
+                f"{theme.heartIcon} **Bot Health**\n"
+                f"└ API status, DB health, system info, restart, cleanup tools (Global Admin only)\n\n"
+                f"{theme.robotIcon} **Bot Presence**\n"
+                f"└ Set the bot's Discord activity status (Global Admin only)\n\n"
+                f"{theme.supportIcon} **Request Support**\n"
+                f"└ Open a support DM with logs attached\n\n"
+                f"{theme.infoIcon} **About Project**\n"
+                f"└ View project info, links, and credits\n"
+                f"{theme.lowerDivider}"
+            )
 
             embed = discord.Embed(
                 title=f"{theme.robotIcon} Maintenance",
@@ -487,21 +415,11 @@ class MainMenu(commands.Cog):
 # ============================================================================
 
 class MainMenuView(discord.ui.View):
-    """Main menu with category buttons (filtered in gifts profile)."""
+    """Main menu — alliances, gift codes, permissions, maintenance."""
 
     def __init__(self, cog):
         super().__init__(timeout=None)
         self.cog = cog
-        if is_gifts_profile():
-            keep = [
-                child for child in list(self.children)
-                if isinstance(child, discord.ui.Button)
-                and child.custom_id in _GIFTS_MAIN_MENU_IDS
-            ]
-            self.clear_items()
-            for i, child in enumerate(keep):
-                child.row = 0 if i < 2 else 1
-                self.add_item(child)
 
     @discord.ui.button(
         label="Alliances",
@@ -535,116 +453,11 @@ class MainMenuView(discord.ui.View):
             print(f"Error loading Gift Codes menu: {e}")
 
     @discord.ui.button(
-        label="Notifications",
-        emoji=theme.bellIcon,
-        style=discord.ButtonStyle.primary,
-        custom_id="notifications",
-        row=0
-    )
-    async def notifications_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        try:
-            notification_cog = self.cog.bot.get_cog("NotificationSystem")
-            if notification_cog:
-                await notification_cog.show_notification_menu(interaction)
-            else:
-                await interaction.response.send_message(
-                    f"{theme.deniedIcon} Notification System module not found.",
-                    ephemeral=True
-                )
-        except Exception as e:
-            logger.error(f"Error loading Notifications menu: {e}")
-            print(f"Error loading Notifications menu: {e}")
-
-    @discord.ui.button(
-        label="Attendance",
-        emoji=theme.listIcon,
-        style=discord.ButtonStyle.primary,
-        custom_id="attendance_tracking",
-        row=1
-    )
-    async def attendance_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        try:
-            attendance_cog = self.cog.bot.get_cog("Attendance")
-            if attendance_cog:
-                await attendance_cog.show_attendance_menu(interaction)
-            else:
-                await interaction.response.send_message(
-                    f"{theme.deniedIcon} Attendance System module not found.",
-                    ephemeral=True
-                )
-        except Exception as e:
-            logger.error(f"Error loading Attendance menu: {e}")
-            print(f"Error loading Attendance menu: {e}")
-
-    @discord.ui.button(
-        label="Bear Tracking",
-        emoji=theme.chartIcon,
-        style=discord.ButtonStyle.primary,
-        custom_id="bear_tracking",
-        row=1
-    )
-    async def bear_tracking_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        try:
-            bear_cog = self.cog.bot.get_cog("BearTrack")
-            if bear_cog:
-                await bear_cog.show_bear_track_menu(interaction)
-            else:
-                await interaction.response.send_message(
-                    f"{theme.deniedIcon} Bear Tracking module not found.",
-                    ephemeral=True
-                )
-        except Exception as e:
-            logger.error(f"Error loading Bear Tracking menu: {e}")
-            print(f"Error loading Bear Tracking menu: {e}")
-
-    @discord.ui.button(
-        label="Minister Scheduling",
-        emoji=theme.ministerIcon,
-        style=discord.ButtonStyle.primary,
-        custom_id="minister_scheduling",
-        row=1
-    )
-    async def minister_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        try:
-            minister_cog = self.cog.bot.get_cog("MinisterMenu")
-            if minister_cog:
-                await minister_cog.show_minister_channel_menu(interaction)
-            else:
-                await interaction.response.send_message(
-                    f"{theme.deniedIcon} Minister Scheduling module not found.",
-                    ephemeral=True
-                )
-        except Exception as e:
-            logger.error(f"Error loading Minister menu: {e}")
-            print(f"Error loading Minister menu: {e}")
-
-    @discord.ui.button(
-        label="Themes",
-        emoji=theme.paletteIcon,
-        style=discord.ButtonStyle.primary,
-        custom_id="themes",
-        row=2
-    )
-    async def themes_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        try:
-            theme_cog = self.cog.bot.get_cog("Theme")
-            if theme_cog:
-                await theme_cog.show_theme_menu(interaction)
-            else:
-                await interaction.response.send_message(
-                    f"{theme.deniedIcon} Theme module not found.",
-                    ephemeral=True
-                )
-        except Exception as e:
-            logger.error(f"Error loading Theme menu: {e}")
-            print(f"Error loading Theme menu: {e}")
-
-    @discord.ui.button(
         label="Permissions",
         emoji=theme.lockIcon,
         style=discord.ButtonStyle.primary,
         custom_id="permissions_top",
-        row=2
+        row=1
     )
     async def permissions_top_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.cog.show_permissions(interaction)
@@ -654,7 +467,7 @@ class MainMenuView(discord.ui.View):
         emoji=theme.robotIcon,
         style=discord.ButtonStyle.primary,
         custom_id="maintenance",
-        row=2
+        row=1
     )
     async def maintenance_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.cog.show_maintenance(interaction)
@@ -703,7 +516,8 @@ class AllianceManagementEntryView(discord.ui.View):
     def _apply_permission_gates(self):
         is_server_or_above = self.tier in (TIER_OWNER, TIER_GLOBAL, TIER_SERVER)
         is_global_or_above = self.tier in (TIER_OWNER, TIER_GLOBAL)
-        can_transfer = is_server_or_above or len(self.alliances) >= 2
+        # Transfer only makes sense with 2+ alliances.
+        can_transfer = len(self.alliances) >= 2
 
         gates = {
             "alliance_entry_add": is_server_or_above,
@@ -954,7 +768,6 @@ class AllianceHubView(discord.ui.View):
         await _route_to_cog(
             interaction, self.cog.bot, "Alliance",
             "show_edit_kingdom_for", self.alliance_id,
-            fallback_method="show_alliance_operations",
             missing_label="Alliance",
         )
 
@@ -2138,46 +1951,6 @@ class TransferOwnerView(discord.ui.View):
 # Maintenance View
 # ============================================================================
 
-class ExternalOcrModal(discord.ui.Modal):
-    """Set the external OCR service URL. Blank = local OCR on this bot."""
-
-    def __init__(self, cog, is_global: bool):
-        super().__init__(title="External OCR Service")
-        self.cog = cog
-        self.is_global = is_global
-        from .bear_track import remote_ocr_setting, OCR_REMOTE_URL_DEFAULT, OCR_REMOTE_URL_ENV
-        stored = remote_ocr_setting()
-        prefill = stored if stored is not None else (OCR_REMOTE_URL_ENV or OCR_REMOTE_URL_DEFAULT)
-        self.url_input = discord.ui.TextInput(
-            label="OCR Service URL",
-            placeholder="Blank = local OCR. Default is the free shared service.",
-            default=prefill,
-            required=False,
-            max_length=300,
-        )
-        self.add_item(self.url_input)
-
-    async def on_submit(self, interaction: discord.Interaction):
-        url = self.url_input.value.strip().rstrip("/")
-        try:
-            from .bear_track import invalidate_remote_ocr_cache
-            with sqlite3.connect("db/settings.sqlite", timeout=30.0) as conn:
-                conn.execute(
-                    "INSERT INTO bot_global_settings (setting_key, setting_value) VALUES (?, ?) "
-                    "ON CONFLICT(setting_key) DO UPDATE SET setting_value=excluded.setting_value",
-                    ("remote_ocr_url", url),
-                )
-                conn.commit()
-            invalidate_remote_ocr_cache()
-        except Exception as e:
-            logger.error(f"Failed to save External OCR URL: {e}")
-            print(f"Failed to save External OCR URL: {e}")
-            await interaction.response.send_message(
-                f"{theme.deniedIcon} Could not save the setting.", ephemeral=True)
-            return
-        await self.cog.show_maintenance(interaction)
-
-
 class MaintenanceView(discord.ui.View):
     """Maintenance sub-menu."""
 
@@ -2187,29 +1960,10 @@ class MaintenanceView(discord.ui.View):
         self.is_global = is_global
 
         # Gate Global-Admin-only buttons by stable custom_id, not label text.
-        global_only = {"check_updates", "backup_system", "bot_health", "bot_presence",
-                       "toggle_remote_ocr"}
+        global_only = {"check_updates", "backup_system", "bot_health", "bot_presence"}
         for child in self.children:
             if isinstance(child, discord.ui.Button) and child.custom_id in global_only:
                 child.disabled = not is_global
-
-        # Gifts profile: OCR is not loaded — hide External OCR controls.
-        if is_gifts_profile():
-            for child in list(self.children):
-                if isinstance(child, discord.ui.Button) and child.custom_id == "toggle_remote_ocr":
-                    self.remove_item(child)
-            return
-
-        # Reflect current External OCR state on its toggle (dynamic label/style).
-        try:
-            from .bear_track import remote_ocr_url
-            ocr_on = remote_ocr_url() is not None
-        except Exception:
-            ocr_on = False
-        for child in self.children:
-            if isinstance(child, discord.ui.Button) and child.custom_id == "toggle_remote_ocr":
-                child.label = f"External OCR Service: {'On' if ocr_on else 'Off'}"
-                child.style = discord.ButtonStyle.success if ocr_on else discord.ButtonStyle.secondary
 
     @discord.ui.button(
         label="Check for Updates",
@@ -2330,25 +2084,11 @@ class MaintenanceView(discord.ui.View):
             print(f"Error loading About menu: {e}")
 
     @discord.ui.button(
-        label="External OCR Service",
-        emoji=theme.globeIcon,
-        style=discord.ButtonStyle.secondary,
-        custom_id="toggle_remote_ocr",
-        row=2
-    )
-    async def toggle_remote_ocr_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not self.is_global:
-            await interaction.response.send_message(
-                f"{theme.deniedIcon} Global Admin only.", ephemeral=True)
-            return
-        await interaction.response.send_modal(ExternalOcrModal(self.cog, self.is_global))
-
-    @discord.ui.button(
         label="Main Menu",
         emoji=theme.homeIcon,
         style=discord.ButtonStyle.secondary,
         custom_id="main_menu_from_maintenance",
-        row=3
+        row=2
     )
     async def main_menu_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.cog.show_main_menu(interaction)

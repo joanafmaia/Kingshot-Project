@@ -272,38 +272,43 @@ class BotOperations(commands.Cog):
                 )
             return
 
-        elif custom_id in ["main_menu", "bot_status", "bot_settings"]:
-            try:
-                if custom_id == "main_menu":
-                    try:
-                        main_menu_cog = self.bot.get_cog("MainMenu")
-                        if main_menu_cog:
-                            await main_menu_cog.show_main_menu(interaction)
-                        else:
-                            await interaction.response.send_message(
-                                f"{theme.deniedIcon} An error occurred while returning to main menu.",
-                                ephemeral=True
-                            )
-                    except Exception as e:
-                        logger.error(f"Main Menu error in bot operations: {e}")
-                        print(f"[ERROR] Main Menu error in bot operations: {e}")
-                        if not interaction.response.is_done():
-                            await interaction.response.send_message(
-                                "An error occurred while returning to main menu.",
-                                ephemeral=True
-                            )
-                        else:
-                            await interaction.followup.send(
-                                "An error occurred while returning to main menu.",
-                                ephemeral=True
-                            )
+        # Removed features (Attendance / Bear / Ministers / Notifications / Themes / OCR).
+        # Old Settings messages may still show these buttons.
+        if custom_id in (
+            "attendance_tracking", "bear_tracking", "minister_scheduling",
+            "notifications", "themes", "toggle_remote_ocr",
+            "bot_status", "bot_settings",
+        ):
+            if not interaction.response.is_done():
+                await interaction.response.send_message(
+                    f"{theme.warnIcon} This option was removed. "
+                    f"Reopen **Settings** — only Alliances, Gift Codes, "
+                    f"Permissions and Maintenance remain.",
+                    ephemeral=True,
+                )
+            return
 
-            except Exception as e:
-                if not interaction.response.is_done():
-                    logger.error(f"Error processing {custom_id}: {e}")
-                    print(f"Error processing {custom_id}: {e}")
+        elif custom_id == "main_menu":
+            try:
+                main_menu_cog = self.bot.get_cog("MainMenu")
+                if main_menu_cog:
+                    await main_menu_cog.show_main_menu(interaction)
+                else:
                     await interaction.response.send_message(
-                        "An error occurred while processing your request.",
+                        f"{theme.deniedIcon} An error occurred while returning to main menu.",
+                        ephemeral=True
+                    )
+            except Exception as e:
+                logger.error(f"Main Menu error in bot operations: {e}")
+                print(f"[ERROR] Main Menu error in bot operations: {e}")
+                if not interaction.response.is_done():
+                    await interaction.response.send_message(
+                        "An error occurred while returning to main menu.",
+                        ephemeral=True
+                    )
+                else:
+                    await interaction.followup.send(
+                        "An error occurred while returning to main menu.",
                         ephemeral=True
                     )
         elif custom_id == "check_updates":

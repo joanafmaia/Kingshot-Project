@@ -94,10 +94,17 @@ HELPER_FILES = [
     'permission_handler',      # Permission checking utilities
     'login_handler',           # API login handling
     'gift_operationsapi',      # Gift code API class
-    'notification_event_types',        # Notification constants/types
+    'gift_redemption',         # Gift redemption helpers
+    'gift_redemption_results', # Gift redemption result embeds
+    'gift_settings',           # Gift settings UI helpers
+    'gift_views',              # Gift menu views
+    'gift_channels',           # Gift channel helpers
     'pimp_my_bot_editor',      # Theme editor utilities
     'pimp_my_bot_preview',     # Theme preview utilities
-    'onnx_lifecycle',          # OCR model lazy-load + eviction (explicit safelist)
+    'browser_headers',         # Browser UA helpers for API calls
+    'bot_level_mapping',       # Town Center level mapping
+    'alliance_power_changes',  # Power delta helpers
+    'bot_startup_display',     # Startup console display
     '__init__',                # Package init file
 ]
 
@@ -131,13 +138,6 @@ def _active_work_summary(bot) -> str | None:
                 parts.append(f"{queue_size} queued operation(s) waiting")
         except Exception:
             pass
-    try:
-        from cogs import onnx_lifecycle
-        ocr_active = sum(1 for m in onnx_lifecycle._REGISTRY.values() if m._refcount > 0)
-        if ocr_active:
-            parts.append(f"{ocr_active} OCR session(s) in flight")
-    except Exception:
-        pass
     return " and ".join(parts) if parts else None
 
 
@@ -758,8 +758,7 @@ class BotHealth(commands.Cog):
 
     def get_requirements_health(self) -> dict:
         """Check installed packages against the active requirements file."""
-        profile = os.environ.get("BOT_PROFILE", "").strip().lower()
-        if profile in ("gifts", "minimal") and os.path.isfile("requirements-gifts.txt"):
+        if os.path.isfile("requirements-gifts.txt"):
             requirements_file = "requirements-gifts.txt"
         else:
             requirements_file = "requirements.txt"
@@ -1557,12 +1556,6 @@ class BotHealth(commands.Cog):
                             db_health: dict, log_health: dict, system_health: dict,
                             requirements: dict | None = None) -> discord.Embed:
         """Build the health dashboard embed."""
-        try:
-            from . import onnx_lifecycle
-            ocr_lines = onnx_lifecycle.get_status_lines()
-        except Exception:
-            ocr_lines = []
-
         overall_text = (
             "Healthy" if overall == STATUS_HEALTHY
             else "Attention Needed" if overall == STATUS_WARNING
@@ -1598,10 +1591,6 @@ class BotHealth(commands.Cog):
                         f"({', '.join(parts)})"
                     )
 
-        ocr_status, ocr_summary = self._build_ocr_summary(ocr_lines)
-        if os.environ.get("BOT_PROFILE", "").strip().lower() in ("gifts", "minimal"):
-            ocr_status = STATUS_HEALTHY
-            ocr_summary = "disabled (gifts profile)"
         disk_health = self.get_disk_health()
         disk_msg = disk_health['message']
 
@@ -1620,8 +1609,7 @@ class BotHealth(commands.Cog):
             value=(
                 f"{status_prefix(overall)}**Overall:** {overall_text}\n"
                 f"{theme.ticketIcon} {status_prefix(wos_api['status'])}**Redemption API:** {wos_api['message']}\n"
-                f"{theme.giftIcon} {status_prefix(gift_api['status'])}**Distribution API:** {gift_api['message']}\n"
-                f"{theme.globeIcon} {status_prefix(ocr_status)}**OCR Engines:** {ocr_summary}"
+                f"{theme.giftIcon} {status_prefix(gift_api['status'])}**Distribution API:** {gift_api['message']}"
             ),
             inline=True,
         )
@@ -1676,24 +1664,6 @@ class BotHealth(commands.Cog):
         )
 
         return embed
-
-    def _build_ocr_summary(self, status_lines: list[dict]) -> tuple[str, str]:
-        """Compact OCR engines summary for the Health section.
-
-        Returns (status, message) — status uses STATUS_* constants and is fed
-        into status_prefix so degraded states get a warn/error icon. Pinned
-        engines (e.g. captcha) and unloaded-but-ready engines all count as
-        'configured'; engines currently held by an active session count as
-        'in use'."""
-        if not status_lines:
-            return STATUS_HEALTHY, "Not configured"
-        total = len(status_lines)
-        in_use = sum(1 for s in status_lines if s.get('refcount', 0) > 0)
-        if in_use:
-            msg = f"{total} configured · {in_use} in use"
-        else:
-            msg = f"{total} configured"
-        return STATUS_HEALTHY, msg
 
 class HealthMenuView(discord.ui.View):
     """Main Bot Health menu — flat layout with inline restart confirmation."""

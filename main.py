@@ -524,51 +524,9 @@ def download_requirements_from_release(beta_mode=False):
     except Exception:
         return False
 
-def _import_onnxruntime_quietly():
-    """Import onnxruntime while suppressing C++ GPU discovery warning."""
-    # Redirect fd 2 (C-level stderr) since ONNX writes there, not to sys.stderr
-    _fd, _null = sys.stderr.fileno(), os.open(os.devnull, os.O_WRONLY)
-    _bak = os.dup(_fd); os.dup2(_null, _fd); os.close(_null)
-    try:
-        import onnxruntime
-        return onnxruntime
-    finally:
-        os.dup2(_bak, _fd); os.close(_bak)
-
-def is_onnxruntime_nightly():
-    """Check if installed onnxruntime is a nightly build."""
-    try:
-        onnxruntime = _import_onnxruntime_quietly()
-        version = onnxruntime.__version__
-        # Nightly versions contain 'dev' or '+' (e.g., "1.20.0.dev20251115001")
-        return "dev" in version or "+" in version
-    except ImportError:
-        return False
-
-def install_onnxruntime_nightly():
-    """Install onnxruntime from nightly feed for Python 3.14+ compatibility."""
-    cmd = [
-        sys.executable, "-m", "pip", "install", "--pre",
-        "--extra-index-url", "https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ORT-Nightly/pypi/simple/",
-        "onnxruntime", "--no-cache-dir"
-    ]
-    if break_system_packages_arg():
-        cmd.append("--break-system-packages")
-    result = subprocess.run(cmd, timeout=1200, capture_output=True, text=True, env=_pip_env())
-    if result.returncode != 0:
-        raise subprocess.CalledProcessError(result.returncode, cmd)
-
-def install_onnxruntime_stable(version_spec="onnxruntime>=1.18.1"):
-    """Install onnxruntime from stable PyPI."""
-    cmd = [sys.executable, "-m", "pip", "install", version_spec, "--no-cache-dir", "--force-reinstall"]
-    if break_system_packages_arg():
-        cmd.append("--break-system-packages")
-    subprocess.check_call(cmd, timeout=1200, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=_pip_env())
-
 def get_active_requirements_file() -> str:
-    """Return requirements file for the current BOT_PROFILE."""
-    profile = os.environ.get("BOT_PROFILE", "").strip().lower()
-    if profile in ("gifts", "minimal") and os.path.exists("requirements-gifts.txt"):
+    """Return the requirements file (alliances + gift codes deps)."""
+    if os.path.exists("requirements-gifts.txt"):
         return "requirements-gifts.txt"
     return "requirements.txt"
 
@@ -601,25 +559,10 @@ def check_and_install_requirements():
                 import aiohttp_socks
             elif package_name == "python-dotenv":
                 import dotenv
-            elif package_name == "python-bidi":
-                import bidi
-            elif package_name == "arabic-reshaper":
-                import arabic_reshaper
             elif package_name.lower() == "pillow":
                 import PIL
-            elif package_name.lower() == "numpy":
-                import numpy
             elif package_name.lower() == "psycopg":
                 import psycopg
-            elif package_name.lower() == "onnxruntime":
-                _import_onnxruntime_quietly()
-                # Check if we need to switch versions based on Python version
-                if sys.version_info >= (3, 14) and not is_onnxruntime_nightly():
-                    # Has stable but needs nightly - mark for reinstall
-                    raise ImportError("Need nightly for Python 3.14+")
-                elif sys.version_info < (3, 14) and is_onnxruntime_nightly():
-                    # Has nightly but can use stable - mark for reinstall
-                    raise ImportError("Should use stable for Python <3.14")
             else:
                 __import__(package_name)
                         
@@ -630,16 +573,6 @@ def check_and_install_requirements():
         startup.phase_start("Installing missing packages")
 
         for package in missing_packages:
-            package_name = _requirement_package_name(package)
-
-            # Handle onnxruntime specially based on Python version
-            if package_name.lower() == "onnxruntime":
-                if sys.version_info >= (3, 14):
-                    install_onnxruntime_nightly()
-                else:
-                    install_onnxruntime_stable(package)
-                continue
-
             try:
                 cmd = [sys.executable, "-m", "pip", "install", package, "--no-cache-dir"]
 
@@ -664,68 +597,25 @@ def check_and_install_requirements():
     startup.phase_ok("Dependencies satisfied")
     return True
 
-def ensure_opencv_headless():
-    """RapidOCR pulls in the full `opencv-python`, whose cv2 needs system GUI
-    libs (libGL.so.1) that headless servers lack — which silently disables OCR.
-    Swap to `opencv-python-headless`, which the bot's image processing uses fine
-    and needs no system libs. No-op once only the headless build is present."""
-    try:
-        from importlib.metadata import distributions
-        installed = {(d.metadata.get("Name") or "").lower().replace("_", "-")
-                     for d in distributions()}
-    except Exception:
-        return
-    if not ({"opencv-python", "opencv-contrib-python"} & installed):
-        return  # already headless-only (or no opencv) — nothing to do
-    startup.phase_start("Switching OpenCV to headless")
-    try:
-        subprocess.check_call(
-            [sys.executable, "-m", "pip", "uninstall", "-y",
-             "opencv-python", "opencv-contrib-python", "opencv-python-headless"],
-            timeout=600, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        )
-        cmd = [sys.executable, "-m", "pip", "install", "--no-cache-dir", "opencv-python-headless"]
-        if break_system_packages_arg():
-            cmd.append("--break-system-packages")
-        subprocess.check_call(cmd, timeout=1200, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=_pip_env())
-        startup.phase_ok("OpenCV set to headless")
-    except Exception as e:
-        startup.phase_fail(
-            "OpenCV headless switch failed", details=[str(e)],
-            fix="pip uninstall -y opencv-python opencv-contrib-python && pip install opencv-python-headless",
-        )
-
 
 def setup_dependencies(beta_mode=False):
     """Main function to set up all dependencies."""
     startup.phase_start("Checking dependencies")
     requirements_file = get_active_requirements_file()
-    gifts_profile = os.environ.get("BOT_PROFILE", "").strip().lower() in ("gifts", "minimal")
 
-    removed_obsolete = False
-    if not gifts_profile and has_obsolete_requirements():
-        removed_obsolete = True
-        safe_remove("requirements.txt", is_dir=False)
-
-    if gifts_profile:
-        if not os.path.exists("requirements-gifts.txt"):
+    if not os.path.exists(requirements_file):
+        if not download_requirements_from_release(beta_mode=beta_mode):
             startup.phase_fail(
                 "Dependencies failed",
-                details=["requirements-gifts.txt missing for BOT_PROFILE=gifts"],
+                details=["Could not find requirements-gifts.txt / requirements.txt"],
                 fix="Restore requirements-gifts.txt from the repo",
             )
-            return False
-    elif not os.path.exists("requirements.txt"):
-        if not download_requirements_from_release(beta_mode=beta_mode):
-            startup.phase_fail("Dependencies failed", details=["Could not download requirements.txt"], fix="Download the complete bot package from: https://github.com/kingshot-project/Kingshot-Discord-Bot/releases")
             return False
 
     if not check_and_install_requirements():
         startup.phase_fail("Dependencies failed", fix=f"pip install -r {requirements_file}")
         return False
 
-    if not gifts_profile:
-        ensure_opencv_headless()
     return True
 
 beta_mode = "--beta" in sys.argv
@@ -1207,35 +1097,10 @@ if __name__ == "__main__":
 
     setup_logging()
 
-    # Silence tqdm progress bars (RapidOCR's model downloads emit them
-    # straight to stderr, which logging can't intercept).
-    os.environ.setdefault('TQDM_DISABLE', '1')
-
-    # Route RapidOCR / onnxruntime chatter to log/rapidocr.txt instead of
-    # the console. Those libraries attach their own StreamHandlers at
-    # import time, which bypass propagate/level on the parent logger;
-    # we have to clear those handlers explicitly before attaching ours.
-    rapidocr_log_path = os.path.join('log', 'rapidocr.txt')
-    rapidocr_handler = logging.handlers.RotatingFileHandler(
-        rapidocr_log_path, maxBytes=2 * 1024 * 1024, backupCount=1, encoding='utf-8',
-    )
-    rapidocr_handler.setFormatter(
-        logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    )
-    rapidocr_handler.setLevel(logging.INFO)
-    for noisy_logger in ['RapidOCR', 'rapidocr', 'rapidocr.main', 'rapidocr.base',
-                         'rapidocr.download_file', 'onnxruntime']:
-        _noisy = logging.getLogger(noisy_logger)
-        for h in list(_noisy.handlers):
-            _noisy.removeHandler(h)
-        _noisy.setLevel(logging.INFO)
-        _noisy.propagate = False
-        _noisy.addHandler(rapidocr_handler)
-
     # Stdout filter: redirect tagged print() calls from cogs to log files
     class _ConsoleFilter:
         PATTERNS = ['[ERROR]', '[WARNING]', '[INFO]', '[SYNC]', '[ORPHAN CHECK]',
-                    '[AUTO-DISABLE]', '[MONITOR]', '[RapidOCR]']
+                    '[AUTO-DISABLE]', '[MONITOR]']
 
         def __init__(self, original):
             self._original = original
@@ -1538,22 +1403,8 @@ if __name__ == "__main__":
     startup.phase_ok("Database ready")
 
     async def load_cogs():
-        # BOT_PROFILE=gifts (or minimal): alliances + gift codes only — skips OCR /
-        # notifications / attendance / bear / ministers to fit low-RAM hosts.
-        profile = os.environ.get("BOT_PROFILE", "").strip().lower()
-        cogs_full = [
-            "pimp_my_bot", "process_queue", "onnx_lifecycle", "bot_main_menu",
-            "alliance_sync", "alliance", "alliance_member_operations", "bot_operations",
-            "alliance_logs", "bot_support", "bot_health", "gift_operations",
-            "alliance_history", "alliance_w_command", "bot_startup",
-            "notification_system", "notification_schedule", "alliance_id_channel",
-            "alliance_channels", "bot_backup", "notification_editor",
-            "notification_templates", "notification_wizard", "attendance",
-            "attendance_report", "attendance_ocr", "minister_schedule",
-            "minister_menu", "minister_archive", "alliance_registration",
-            "bear_track", "db_cloud_sync",
-        ]
-        cogs_gifts = [
+        # Alliances + gift codes profile (no OCR / attendance / bear / ministers / notifications).
+        cogs = [
             "pimp_my_bot", "process_queue", "bot_main_menu", "alliance_sync",
             "alliance", "alliance_member_operations", "bot_operations",
             "alliance_logs", "bot_support", "bot_health", "gift_operations",
@@ -1561,20 +1412,14 @@ if __name__ == "__main__":
             "alliance_id_channel", "alliance_channels", "bot_backup",
             "alliance_registration", "db_cloud_sync",
         ]
-        if profile in ("gifts", "minimal"):
-            cogs = cogs_gifts
-            startup.phase_ok("Profile: gifts (alliances + gift codes)")
-        else:
-            cogs = cogs_full
+        startup.phase_ok("Profile: alliances + gift codes")
 
         failed_cogs = []
 
-        # Suppress all console output during cog loading to prevent
-        # third-party libraries (RapidOCR, onnxruntime) from spamming.
+        # Suppress console noise during cog loading.
         logging.disable(logging.INFO)
         _real_stderr = sys.stderr
         sys.stderr = open(os.devnull, 'w')
-        # Also suppress empty newlines leaking through stdout filter
         _real_stdout = sys.stdout
         sys.stdout = open(os.devnull, 'w')
 
@@ -1643,32 +1488,6 @@ if __name__ == "__main__":
                         startup.api_status("Gift Code Redemption API", "error", "Check failed")
                 except Exception:
                     startup.api_status("Gift Code Redemption API", "error", "Check failed")
-
-                # OCR status last, after both API checks, for a clean order.
-                profile = os.environ.get("BOT_PROFILE", "").strip().lower()
-                if profile in ("gifts", "minimal"):
-                    startup.phase_ok("OCR disabled (gifts profile)")
-                else:
-                    try:
-                        from cogs.bear_track import remote_ocr_url, OCR_REMOTE_TOKEN
-                        ocr_url = remote_ocr_url()
-                        if not ocr_url:
-                            startup.phase_ok("Using local OCR")
-                        else:
-                            startup.phase_start("Checking External OCR Service")
-                            try:
-                                async with _aio.ClientSession(timeout=timeout) as ocr_session:
-                                    async with ocr_session.get(
-                                        f"{ocr_url}/health",
-                                        headers={"X-API-Key": OCR_REMOTE_TOKEN},
-                                    ) as resp:
-                                        ok = resp.status == 200
-                                        ocr_detail = None if ok else f"HTTP {resp.status}"
-                                startup.api_status("External OCR Service", "ok" if ok else "error", ocr_detail)
-                            except Exception:
-                                startup.api_status("External OCR Service", "error", "Unreachable (using local OCR)")
-                    except Exception:
-                        pass
             except Exception:
                 pass
 
