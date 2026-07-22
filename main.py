@@ -143,7 +143,7 @@ except ImportError:
     # cogs/ is missing (likely a bare main.py drop). Fetch the full source for this branch and restart.
     _bootstrap_from_main_branch(os.environ.get(
         "BOT_BOOTSTRAP_URL",
-        "https://github.com/kingshot-project/Kingshot-Discord-Bot/archive/refs/heads/main.zip",
+        "https://github.com/joanafmaia/Kingshot-Project/archive/refs/heads/main.zip",
     ))
     print("Download complete. Restarting...")
     if sys.platform == "win32":
@@ -412,11 +412,13 @@ def has_obsolete_requirements():
         return False
 
 
-# Configuration for multiple update sources
+# Updates pull from this fork by default so official releases don't restore
+# removed modules. Override with UPDATE_REPO=owner/name if needed.
+_UPDATE_REPO = os.environ.get("UPDATE_REPO", "joanafmaia/Kingshot-Project").strip() or "joanafmaia/Kingshot-Project"
 UPDATE_SOURCES = [
     {
         "name": "GitHub",
-        "api_url": "https://api.github.com/repos/kingshot-project/Kingshot-Discord-Bot/releases/latest",
+        "api_url": f"https://api.github.com/repos/{_UPDATE_REPO}/releases/latest",
         "primary": True
     }
 ]
@@ -504,10 +506,11 @@ def download_requirements_from_release(beta_mode=False):
     
     # Build raw URL based on source and mode
     if source_name == "GitHub" or "GitHub" in source_name:
+        repo = os.environ.get("UPDATE_REPO", "joanafmaia/Kingshot-Project").strip() or "joanafmaia/Kingshot-Project"
         if beta_mode:
-            raw_url = "https://raw.githubusercontent.com/kingshot-project/Kingshot-Discord-Bot/main/requirements.txt"
+            raw_url = f"https://raw.githubusercontent.com/{repo}/main/requirements.txt"
         else:
-            raw_url = f"https://raw.githubusercontent.com/kingshot-project/Kingshot-Discord-Bot/refs/tags/{tag}/requirements.txt"
+            raw_url = f"https://raw.githubusercontent.com/{repo}/refs/tags/{tag}/requirements.txt"
     else:
         return False
 
@@ -563,6 +566,12 @@ def check_and_install_requirements():
                 import PIL
             elif package_name.lower() == "psycopg":
                 import psycopg
+            elif package_name.lower() == "numpy":
+                import numpy
+            elif package_name.lower() == "onnxruntime":
+                import onnxruntime  # noqa: F401
+            elif package_name.lower() == "matplotlib":
+                import matplotlib  # noqa: F401
             else:
                 __import__(package_name)
                         
@@ -1403,16 +1412,17 @@ if __name__ == "__main__":
     startup.phase_ok("Database ready")
 
     async def load_cogs():
-        # Alliances + gift codes profile (no OCR / attendance / bear / ministers / notifications).
+        # Custom profile: alliances + gift codes + bear track.
+        # Excludes attendance, ministers, and notification system.
         cogs = [
-            "pimp_my_bot", "process_queue", "bot_main_menu", "alliance_sync",
-            "alliance", "alliance_member_operations", "bot_operations",
+            "pimp_my_bot", "process_queue", "onnx_lifecycle", "bot_main_menu",
+            "alliance_sync", "alliance", "alliance_member_operations", "bot_operations",
             "alliance_logs", "bot_support", "bot_health", "gift_operations",
             "alliance_history", "alliance_w_command", "bot_startup",
             "alliance_id_channel", "alliance_channels", "bot_backup",
-            "alliance_registration", "db_cloud_sync",
+            "alliance_registration", "bear_track", "db_cloud_sync",
         ]
-        startup.phase_ok("Profile: alliances + gift codes")
+        startup.phase_ok("Profile: alliances + gift codes + bear track")
 
         failed_cogs = []
 

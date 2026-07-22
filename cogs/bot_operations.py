@@ -272,17 +272,17 @@ class BotOperations(commands.Cog):
                 )
             return
 
-        # Removed features (Attendance / Bear / Ministers / Notifications / Themes / OCR).
+        # Removed features (Attendance / Ministers / Notifications / Themes).
         # Old Settings messages may still show these buttons.
         if custom_id in (
-            "attendance_tracking", "bear_tracking", "minister_scheduling",
-            "notifications", "themes", "toggle_remote_ocr",
+            "attendance_tracking", "minister_scheduling",
+            "notifications", "themes",
             "bot_status", "bot_settings",
         ):
             if not interaction.response.is_done():
                 await interaction.response.send_message(
                     f"{theme.warnIcon} This option was removed. "
-                    f"Reopen **Settings** — only Alliances, Gift Codes, "
+                    f"Reopen **Settings** — Alliances, Gift Codes, Bear Tracking, "
                     f"Permissions and Maintenance remain.",
                     ephemeral=True,
                 )
@@ -440,7 +440,11 @@ class BotOperations(commands.Cog):
             if current_version.startswith("beta-"):
                 return current_version, current_version, [], False
 
-            latest_release_url = "https://api.github.com/repos/kingshot-project/Kingshot-Discord-Bot/releases/latest"
+            latest_release_url = (
+                f"https://api.github.com/repos/"
+                f"{os.environ.get('UPDATE_REPO', 'joanafmaia/Kingshot-Project').strip() or 'joanafmaia/Kingshot-Project'}"
+                f"/releases/latest"
+            )
 
             response = await asyncio.to_thread(requests.get, latest_release_url, timeout=10)
             if response.status_code != 200:

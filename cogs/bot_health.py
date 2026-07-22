@@ -105,6 +105,8 @@ HELPER_FILES = [
     'bot_level_mapping',       # Town Center level mapping
     'alliance_power_changes',  # Power delta helpers
     'bot_startup_display',     # Startup console display
+    'onnx_lifecycle',          # OCR model lazy-load + eviction
+    'ocr_resume',              # OCR session resume snapshots
     '__init__',                # Package init file
 ]
 
